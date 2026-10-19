@@ -98,6 +98,19 @@ die() { echo "agy-delegate: $*" >&2; exit 1; }
 # (avoids `shift 2` aborting under `set -e` with a cryptic "shift count" error).
 need() { [ "$1" -ge 2 ] || die "option '$2' needs a value"; }
 
+# True when an agy error blob says the requested --model does not exist on this plan.
+# ONE definition, used by both the exit-14 classifier and the pro-tier fallback trigger
+# (#104): if agy rewords the message, both move together — a drift between the two
+# would make the fallback quietly stop firing while exit 14 still said what it says.
+model_unavailable_blob() {
+  shopt -s nocasematch
+  case "$1" in
+    *"invalid --model"*|*"is not recognized as a known model"*|*"not a known model"*)
+      shopt -u nocasematch; return 0 ;;
+  esac
+  shopt -u nocasematch; return 1
+}
+
 # Optional side channel for AGY_USAGE / AGY_SIGNAL.
 #
 # WHY this exists: these lines go to stderr so they never pollute the conductor's
@@ -557,10 +570,7 @@ PY
     probe_blob="$(cat "$ERR" 2>/dev/null)"
     [ -n "$JSON_ERROR" ] && probe_blob="$JSON_ERROR
 $probe_blob"
-    shopt -s nocasematch
-    case "$probe_blob" in
-      *"invalid --model"*|*"is not recognized as a known model"*|*"not a known model"*)
-        shopt -u nocasematch
+    if model_unavailable_blob "$probe_blob"; then
         MODEL="${PRO_FALLBACK_MODELS[0]}"
         if [ "${#PRO_FALLBACK_MODELS[@]}" -gt 1 ]; then
           PRO_FALLBACK_MODELS=("${PRO_FALLBACK_MODELS[@]:1}")
@@ -569,9 +579,8 @@ $probe_blob"
         fi
         ARGS[1]="$MODEL"
         echo "agy-delegate: pro fell back to $MODEL (Argon not on this plan)" >&2
-        continue ;;
-    esac
-    shopt -u nocasematch
+        continue
+    fi
   fi
   break
 done
@@ -655,15 +664,16 @@ $blob"
       shopt -u nocasematch; signal AUTH_REQUIRED "agy not authenticated — run \`agy\` once"; exit 11 ;;
     *"timed out"*|*"deadline exceeded"*|*"print-timeout"*)
       shopt -u nocasematch; signal TIMEOUT "agy print-timeout / deadline exceeded"; exit 12 ;;
-    *"invalid --model"*|*"is not recognized as a known model"*|*"not a known model"*)
-      # agy >= 1.1.2 hard-fails (instead of silently downgrading) when --model can't be
-      # resolved — common when a tier_* / default_model remap points at a model this plan
-      # doesn't expose. Surface it as its own actionable category.
-      shopt -u nocasematch
-      echo "agy-delegate: model '$MODEL' is not available on this plan — run \`agy models\`, then fix --model / the tier_* / default_model option." >&2
-      signal MODEL_UNAVAILABLE "model not in \`agy models\` (check --model / tier remaps)"; exit 14 ;;
   esac
   shopt -u nocasematch
+  if model_unavailable_blob "$blob"; then
+    # agy >= 1.1.2 hard-fails (instead of silently downgrading) when --model can't be
+    # resolved — common when a tier_* / default_model remap points at a model this plan
+    # doesn't expose. Surface it as its own actionable category. The patterns live in
+    # model_unavailable_blob(), shared with the pro-tier fallback trigger above.
+    echo "agy-delegate: model '$MODEL' is not available on this plan — run \`agy models\`, then fix --model / the tier_* / default_model option." >&2
+    signal MODEL_UNAVAILABLE "model not in \`agy models\` (check --model / tier remaps)"; exit 14
+  fi
   signal AGY_FAILED "agy exited $RC"
   exit 2
 fi

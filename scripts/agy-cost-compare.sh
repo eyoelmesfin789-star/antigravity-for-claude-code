@@ -55,9 +55,27 @@ trap 'rm -f "$DEL_ERR" 2>/dev/null' EXIT
 
 echo ">> Delegating to agy (tier=$TIER) ..." >&2
 START=$(date +%s 2>/dev/null || echo 0)
+# Stream the delegate's stderr live AND keep a copy for the price lookup below. A
+# `2> >(tee ...)` process substitution would do both, but a bare `wait` does not wait
+# for it on bash < 4.4 (macOS ships 3.2), so python could read $DEL_ERR before tee had
+# flushed the AGY_USAGE line and silently price a fallback run at the wrong rate. A
+# named pipe gives tee a PID we can wait on explicitly; if mkfifo is unavailable, fall
+# back to buffering stderr in the file and replaying it afterwards.
 set +e
-OUT="$({ "$HERE/agy-delegate.sh" --tier "$TIER" ${YOLO:+$YOLO} "$PROMPT" 2> >(tee "$DEL_ERR" >&2); rc=$?; wait; exit "$rc"; })"
-RC=$?
+FIFO="$(mktemp -u "${TMPDIR:-/tmp}/agy-cc-fifo.XXXXXX")"
+if mkfifo "$FIFO" 2>/dev/null; then
+  trap 'rm -f "$DEL_ERR" "$FIFO" 2>/dev/null' EXIT
+  tee "$DEL_ERR" <"$FIFO" >&2 &
+  TEE_PID=$!
+  OUT="$("$HERE/agy-delegate.sh" --tier "$TIER" ${YOLO:+$YOLO} "$PROMPT" 2>"$FIFO")"
+  RC=$?
+  wait "$TEE_PID" 2>/dev/null
+  rm -f "$FIFO"
+else
+  OUT="$("$HERE/agy-delegate.sh" --tier "$TIER" ${YOLO:+$YOLO} "$PROMPT" 2>"$DEL_ERR")"
+  RC=$?
+  [ -s "$DEL_ERR" ] && cat "$DEL_ERR" >&2
+fi
 set -e
 [ "$RC" -eq 0 ] || exit "$RC"
 END=$(date +%s 2>/dev/null || echo 0)
