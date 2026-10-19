@@ -28,6 +28,10 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=lib/plugin-options.sh
+. "$HERE/lib/plugin-options.sh"
+load_plugin_options
+
 TIER="flash"
 
 YOLO=""
@@ -47,10 +51,12 @@ PROMPT="${*:-}"
 PRICES="$HERE/../prices.json"
 if [ -f "$PRICES" ] && command -v python3 >/dev/null 2>&1; then
   eval "$(python3 - "$PRICES" "$TIER" 2>/dev/null <<'PY'
-import json,sys
+import json,os,sys
 try:
     d=json.load(open(sys.argv[1])); t=sys.argv[2]
-    g=d["gemini_pro"] if t=="pro" else d["gemini_flash"]; c=d["claude_opus"]
+    pm=os.environ.get("CLAUDE_PLUGIN_OPTION_TIER_PRO","Gemini 4 Argon (High)").lower()
+    pk="gemini_argon" if ("argon" in pm and "gemini_argon" in d) else "gemini_pro"
+    g=d[pk] if t=="pro" else d["gemini_flash"]; c=d["claude_opus"]
     print(f'_CIN={c["in"]} _COUT={c["out"]} _GIN={g["in"]} _GOUT={g["out"]}')
 except Exception: pass
 PY
