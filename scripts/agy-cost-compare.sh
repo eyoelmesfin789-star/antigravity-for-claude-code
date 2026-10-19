@@ -18,7 +18,8 @@
 #   agy-cost-compare.sh [-t flash|flash-lo|pro] "the task prompt"
 #
 # Env overrides (USD per 1M tokens):
-#   CLAUDE_IN_PER_M  CLAUDE_OUT_PER_M     (default: 5 / 25   -- VERIFY!)
+#   CLAUDE_IN_PER_M  CLAUDE_OUT_PER_M     (default: prices.json claude_opus,
+#                                          today 4 / 20 -- VERIFY!)
 #   GEMINI_IN_PER_M  GEMINI_OUT_PER_M     (default: prices.json gemini_flash,
 #                                          today 0.75 / 3.75 -- VERIFY against
 #                                          your own Vertex rates)

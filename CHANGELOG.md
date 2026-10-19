@@ -29,9 +29,13 @@ All notable changes to **Antigravity for Claude Code**. Format loosely follows
   spelling, so the second `AGENTS.md` symlink failed and the run exited 17.
   `default_roots()` collapses on filesystem identity (`st_dev`, `st_ino`) and a new
   `path_within()` compares `normcase(abspath())` for both the nesting check and
-  `trustedWorkspaces`. Measured on Linux: migrate suite 51 -> 57 checks (three new tests
-  plus the isolation guard), all passing; the reporter measured 38/17 -> 41/16 on Windows
-  with the 16 pre-existing failures untouched.
+  `trustedWorkspaces`. Review caught that FAT32/exFAT and some network shares report
+  `st_ino == 0` for every path, where that key would have merged every project on the
+  volume into the first one and silently stopped scanning the rest — so the identity key
+  falls back to `normcase(realpath())` when there is no inode, with its own test. Measured
+  on Linux: migrate suite 51 -> 58 checks (four new tests plus the isolation guard), all
+  passing; the reporter measured 38/17 -> 41/16 on Windows with the 16 pre-existing
+  failures untouched.
 - **`prices.json` priced the models of two generations ago.** (#1) `claude_opus` was
   5 / 25 and `claude_sonnet` 3 / 15 (the 4.x list), while the deck that actually
   orchestrates today is Opus 5.5 at 4 / 20 (Sonnet 5.5: 2 / 10), so every

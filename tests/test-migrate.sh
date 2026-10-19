@@ -719,6 +719,36 @@ PY
 then ok "default_roots collapses spellings of the same directory"
 else bad "default_roots walks one directory once per spelling"; fi
 
+# FAT32/exFAT and some network shares report st_ino == 0 for every path. Keying
+# identity on (st_dev, st_ino) there merged every distinct project on the volume into
+# the first one and silently stopped scanning the rest. Without an inode the key must
+# fall back to the normalised path, which still folds spelling variants.
+if python3 - "$MIG" "$TMP" <<'PY'
+import importlib.util, json, os, sys
+spec = importlib.util.spec_from_file_location("m", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+base = os.path.join(sys.argv[2], "no-inode")
+a = os.path.join(base, "alpha"); b = os.path.join(base, "beta")
+os.makedirs(a, exist_ok=True); os.makedirs(b, exist_ok=True)
+cj = os.path.join(base, "claude.json")
+json.dump({"projects": {a: {}, b: {}, b.replace(os.sep, "/") + "/": {}}}, open(cj, "w"))
+m.claude_json_path = lambda: cj
+real_stat = os.stat
+class NoInode:
+    """A stat result as FAT32/exFAT report it: everything real except st_ino == 0."""
+    st_ino = 0
+    def __init__(self, st): self._st = st
+    def __getattr__(self, name): return getattr(self._st, name)
+m.os.stat = lambda p, *a, **k: NoInode(real_stat(p, *a, **k))
+try:
+    roots = m.default_roots()
+finally:
+    m.os.stat = real_stat
+assert sorted(roots) == sorted([a, b]), roots
+PY
+then ok "default_roots keeps distinct directories apart when st_ino is 0"
+else bad "default_roots merged distinct directories on a filesystem without inodes"; fi
+
 # trustedWorkspaces compared raw strings, so a project already covered by an
 # existing entry spelled with other separators (or, on a case-insensitive
 # filesystem, other case) was appended again.
