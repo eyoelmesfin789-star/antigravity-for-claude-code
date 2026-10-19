@@ -33,7 +33,8 @@ All notable changes to **Antigravity for Claude Code**. Format loosely follows
   `agy -p --model` rejected both with exit 14. Two-column `agy models` lines (including
   single-word slugs like `auto`) now compare a slug against the slug column and a display name
   against the display-name column for exact normalized equality, and a missing tier model prints
-  up to three candidate matches from `agy models` (skipping specialist orchestrator entries).
+  up to three candidate matches from `agy models` (ranking direct substring matches ahead of
+  generic family matches across the full list, and skipping specialist orchestrator entries).
 - **`AGY_USAGE_LOG` now creates a missing parent directory before appending and warns once if
   unwritable.** (#103) Setting `AGY_USAGE_LOG` (or `usage_log`) to a path whose parent folder
   did not yet exist silently dropped every `AGY_USAGE` and `AGY_SIGNAL` line because `>>` does
@@ -43,7 +44,7 @@ All notable changes to **Antigravity for Claude Code**. Format loosely follows
 - **Catch-up to `agy 1.4.2`.** `agy-delegate.sh` accepts `--mode auto` (added in `agy 1.3.5`
   for dynamic plan/execute switching) alongside `accept-edits` and `plan`, and classifies
   Google AI credits / spend-cap exhaustion diagnostics (`agy 1.2.12+`) as exit 10
-  (`QUOTA_EXHAUSTED`). Suite 349 -> 370 (371 with PR base check).
+  (`QUOTA_EXHAUSTED`). Suite 350 -> 372 (373 with PR base check).
 
 ## 0.28.1
 

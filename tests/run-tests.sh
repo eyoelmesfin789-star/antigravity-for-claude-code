@@ -51,6 +51,10 @@ for _t in FLASH FLASH_LO PRO; do
     echo "ok: doctor and the wrapper agree on the $_t tier default"; PASS=$((PASS+1));
   else echo "FAIL: tier $_t default drift — wrapper '$_w' vs doctor '$_d'"; FAIL=$((FAIL+1)); fi
 done
+_cc_pro="$(sed -n 's/.*CLAUDE_PLUGIN_OPTION_TIER_PRO:-\(.*\)}".*/\1/p' "$ROOT/scripts/agy-cost-compare.sh" | head -1)"
+if [ -n "$DEF_PRO" ] && [ "$_cc_pro" = "$DEF_PRO" ]; then
+  echo "ok: agy-cost-compare and the wrapper agree on the PRO tier default"; PASS=$((PASS+1));
+else echo "FAIL: tier PRO default drift — wrapper '$DEF_PRO' vs agy-cost-compare '$_cc_pro'"; FAIL=$((FAIL+1)); fi
 
 # bash does not hoist: a function called above its definition is `command not found`,
 # exit 127, and every `if` around it silently takes the else branch. That is how two
@@ -1195,9 +1199,11 @@ if has "tier model not in 'agy models': Gemini 4 Argon" "$doc_prefix" && has "Ge
   echo "ok: doctor rejects prefix 'Gemini 4 Argon' and suggests 'Gemini 4 Argon (High)' (#102)"; PASS=$((PASS+1));
 else echo "FAIL: doctor accepted prefix 'Gemini 4 Argon' or missed suggestion (#102): $doc_prefix"; FAIL=$((FAIL+1)); fi
 doc_oldpro="$(twocol_doctor "Gemini 3.1 Pro (High)")"
-if has "tier model not in 'agy models': Gemini 3.1 Pro (High)" "$doc_oldpro" && ! has "Orchestrator" "$doc_oldpro"; then
-  echo "ok: doctor rejects 'Gemini 3.1 Pro (High)' and skips Orchestrator in suggestions (#104)"; PASS=$((PASS+1));
-else echo "FAIL: doctor matched 'Gemini 3.1 Pro (High)' or suggested Orchestrator (#104): $doc_oldpro"; FAIL=$((FAIL+1)); fi
+if has "tier model not in 'agy models': Gemini 3.1 Pro (High)" "$doc_oldpro" \
+   && has "available in 'agy models': Gemini 3.1 Pro" "$doc_oldpro" \
+   && ! has "Orchestrator" "$doc_oldpro"; then
+  echo "ok: doctor rejects 'Gemini 3.1 Pro (High)', ranks direct match 'Gemini 3.1 Pro' first, and skips Orchestrator (#104)"; PASS=$((PASS+1));
+else echo "FAIL: doctor matched 'Gemini 3.1 Pro (High)', buried 'Gemini 3.1 Pro', or suggested Orchestrator (#104): $doc_oldpro"; FAIL=$((FAIL+1)); fi
 doc_disp="$(twocol_doctor "Gemini 3.1 Pro")"
 if has "tier model present: Gemini 3.1 Pro" "$doc_disp"; then
   echo "ok: doctor accepts exact effortless display name 'Gemini 3.1 Pro' (#104)"; PASS=$((PASS+1));
@@ -1902,6 +1908,8 @@ cc_pro31=$(STUB_MODE=text CLAUDE_PLUGIN_OPTION_TIER_PRO="Gemini 3.1 Pro" "$ROOT/
 check "agy-cost-compare --tier pro uses gemini_pro (out 12.00) when remapped to 3.1 Pro" 0 "$?" "12.00" "$cc_pro31"
 cc_pro31_pc=$(STUB_MODE=text CLAUDE_CONFIG_DIR="$PCDIR" "$ROOT/scripts/agy-cost-compare.sh" --tier pro "hi" 2>/dev/null)
 check "agy-cost-compare --tier pro reads tier_pro from settings.json pluginConfigs (#101)" 0 "$?" "12.00" "$cc_pro31_pc"
+cc_pro31_fb=$(STUB_MODE=text STUB_REJECT_MODEL="$DEF_PRO" "$ROOT/scripts/agy-cost-compare.sh" --tier pro "hi" 2>/dev/null)
+check "agy-cost-compare --tier pro uses gemini_pro (out 12.00) after runtime fallback to 3.1 Pro (#104)" 0 "$?" "12.00" "$cc_pro31_fb"
 
 echo "== measure-session.py =="
 SESS="$TMP/sess.jsonl"

@@ -67,11 +67,15 @@ EOF
 }
 
 # Suggest up to 3 candidate models from $MODELS when a tier model is missing (#102, #104).
-# Prefers lines whose normalized form contains the missing name (e.g. "Gemini 4 Argon" ->
-# "Gemini 4 Argon (High)"), then falls back to family keywords (argon/pro or flash),
-# skipping specialist coordinator/orchestrator entries on generic family matches.
+# Ranks direct substring matches (either $n contains $want, e.g. "Gemini 4 Argon" ->
+# "Gemini 4 Argon (High)", or $want contains the normalized display name, e.g.
+# "Gemini 3.1 Pro (High)" -> "Gemini 3.1 Pro") AHEAD of generic family matches (argon/pro
+# or flash) across the entire model list, so earlier family rows never bury a direct match
+# that appears later in `agy models`. Specialist orchestrator/coordinator entries are
+# skipped on generic family matches.
 suggest_models() {
-  local want line first first_lc rest disp n cand="" count=0 fam="flash"
+  local want line first first_lc rest disp n nd fam="flash"
+  local direct=() family=() picked=() item
   want="$(norm_model "$1")"
   case "$want" in *pro*|*argon*|*opus*) fam="pro" ;; esac
   while IFS= read -r line; do
@@ -87,25 +91,34 @@ suggest_models() {
       disp="$rest"
     fi
     n="$(norm_model "$line")"
-    if [ -n "$want" ] && case "$n" in *"$want"*) true ;; *) false ;; esac; then
-      :
+    nd="$(norm_model "$disp")"
+    if [ -n "$want" ] && [ -n "$nd" ] && {
+         case "$n" in *"$want"*) true ;; *) false ;; esac ||
+         case "$want" in *"$nd"*) true ;; *) false ;; esac
+       }; then
+      direct+=("$disp")
     else
       case "$n" in *orchestrator*|*coordinator*) continue ;; esac
       if [ "$fam" = "pro" ] && case "$n" in *argon*|*pro*|*opus*) true ;; *) false ;; esac; then
-        :
+        family+=("$disp")
       elif [ "$fam" = "flash" ] && case "$n" in *flash*) true ;; *) false ;; esac; then
-        :
-      else
-        continue
+        family+=("$disp")
       fi
     fi
-    cand="${cand:+$cand, }$disp"
-    count=$((count + 1))
-    [ "$count" -ge 3 ] && break
   done <<EOF
 $MODELS
 EOF
-  [ -n "$cand" ] && printf '%s' "$cand"
+  for item in "${direct[@]:-}" "${family[@]:-}"; do
+    [ -n "$item" ] || continue
+    picked+=("$item")
+    [ "${#picked[@]}" -ge 3 ] && break
+  done
+  local out=""
+  for item in "${picked[@]:-}"; do
+    [ -n "$item" ] || continue
+    out="${out:+$out, }$item"
+  done
+  [ -n "$out" ] && printf '%s' "$out"
 }
 
 # Resolve a usable `timeout` command (GNU coreutils, or macOS Homebrew gtimeout)
