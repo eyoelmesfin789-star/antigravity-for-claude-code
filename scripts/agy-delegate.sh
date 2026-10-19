@@ -455,11 +455,12 @@ if on_windows_native && [ -z "$TO_CMD" ]; then
 fi
 
 # #104: when --tier pro uses the unremapped default (Gemini 4 Argon (High)) on a plan
-# that does not expose Argon (e.g. API-key / GCP project / older agy), fall back once
-# to Gemini 3.1 Pro so both plan shapes work out of the box.
-PRO_FALLBACK_MODEL=""
+# that does not expose Argon (e.g. API-key / GCP project / older agy), fall back through
+# Gemini 3.1 Pro (agy 1.4+ display name) and Gemini 3.1 Pro (High) (pre-1.4 / API-key
+# display name) so those plan shapes work out of the box.
+PRO_FALLBACK_MODELS=()
 if [ "$USAGE_TIER" = "pro" ] && [ -z "${CLAUDE_PLUGIN_OPTION_TIER_PRO:-}" ]; then
-  PRO_FALLBACK_MODEL="Gemini 3.1 Pro"
+  PRO_FALLBACK_MODELS=("Gemini 3.1 Pro" "Gemini 3.1 Pro (High)")
 fi
 
 while :; do
@@ -552,7 +553,7 @@ PY
     rm -f "$RESP" "$JERR" "$JDEN"
   fi
 
-  if [ "$RC" -ne 0 ] && [ -n "$PRO_FALLBACK_MODEL" ]; then
+  if [ "$RC" -ne 0 ] && [ "${#PRO_FALLBACK_MODELS[@]}" -gt 0 ]; then
     probe_blob="$(cat "$ERR" 2>/dev/null)"
     [ -n "$JSON_ERROR" ] && probe_blob="$JSON_ERROR
 $probe_blob"
@@ -560,8 +561,12 @@ $probe_blob"
     case "$probe_blob" in
       *"invalid --model"*|*"is not recognized as a known model"*|*"not a known model"*)
         shopt -u nocasematch
-        MODEL="$PRO_FALLBACK_MODEL"
-        PRO_FALLBACK_MODEL=""
+        MODEL="${PRO_FALLBACK_MODELS[0]}"
+        if [ "${#PRO_FALLBACK_MODELS[@]}" -gt 1 ]; then
+          PRO_FALLBACK_MODELS=("${PRO_FALLBACK_MODELS[@]:1}")
+        else
+          PRO_FALLBACK_MODELS=()
+        fi
         ARGS[1]="$MODEL"
         echo "agy-delegate: pro fell back to $MODEL (Argon not on this plan)" >&2
         continue ;;

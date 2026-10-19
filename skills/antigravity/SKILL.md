@@ -56,7 +56,9 @@ or persistently with the `default_model` / `tier_*` plugin options (in `~/.claud
 `pluginConfigs` or env `CLAUDE_PLUGIN_OPTION_*`). The `pro` tier defaults to **Gemini 4 Argon (High)**
 since 0.29.0 (consumer Google AI plans dropped 3.1 Pro for Argon, #104, and enterprise plans on
 agy 1.4.x renamed `gemini-3.1-pro-high`'s display name to `Gemini 3.1 Pro` while also serving
-`Gemini 4 Argon (High)`). Keep the executor a
+`Gemini 4 Argon (High)`). When `tier_pro` is unremapped and the active plan does not expose
+Argon, `agy-delegate` automatically falls back to `Gemini 3.1 Pro` (then `Gemini 3.1 Pro (High)`)
+and logs `pro fell back to …` on stderr — check `AGY_USAGE.model` for the model that actually ran. Keep the executor a
 *different, cheaper* model than the Claude conductor: that's what yields the cost saving **and**
 the cross-model verification value (Claude executing Claude loses both).
 

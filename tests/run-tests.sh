@@ -112,14 +112,15 @@ if [ "$1" = "--help" ]; then
 fi
 if [ -n "${STUB_REJECT_MODEL:-}" ]; then
   for _a in "$@"; do
-    if [ "$_a" = "$STUB_REJECT_MODEL" ]; then
-      if [ "${STUB_JSON_CAPABLE:-0}" = "1" ]; then
-        printf '{"conversation_id":"","status":"ERROR","response":"","error":"invalid model selection: model %s is not recognized as a known model","usage":{}}' "$STUB_REJECT_MODEL"
-      else
-        echo "Error: invalid --model \"$STUB_REJECT_MODEL\": model $STUB_REJECT_MODEL is not recognized as a known model" >&2
-      fi
-      exit 1
-    fi
+    case "|${STUB_REJECT_MODEL}|" in
+      *"|${_a}|"*)
+        if [ "${STUB_JSON_CAPABLE:-0}" = "1" ]; then
+          printf '{"conversation_id":"","status":"ERROR","response":"","error":"invalid model selection: model %s is not recognized as a known model","usage":{}}' "$_a"
+        else
+          echo "Error: invalid --model \"$_a\": model $_a is not recognized as a known model" >&2
+        fi
+        exit 1 ;;
+    esac
   done
 fi
 case "${STUB_MODE:-text}" in
@@ -270,15 +271,21 @@ check "agy timeout -> exit 12 + signal" 12 "$rc" "TIMEOUT" "$out"
 out=$(STUB_MODE=badmodel "$DELEGATE" "hi" 2>&1); rc=$?
 check "agy bad --model -> exit 14 + signal" 14 "$rc" "MODEL_UNAVAILABLE" "$out"
 
-# #104: unremapped --tier pro falls back once from Gemini 4 Argon (High) to Gemini 3.1 Pro
-# when Argon is unavailable on the plan; explicit tier_pro remap does NOT fall back.
+# #104: unremapped --tier pro falls back from Gemini 4 Argon (High) to Gemini 3.1 Pro,
+# then to Gemini 3.1 Pro (High) when neither Argon nor 3.1 Pro is on the plan;
+# explicit tier_pro remap does NOT fall back.
 out=$(STUB_MODE=args STUB_REJECT_MODEL="$DEF_PRO" "$DELEGATE" --tier pro "hi" 2>&1); rc=$?
 check "pro tier falls back to Gemini 3.1 Pro when Argon is unavailable (#104)" 0 "$rc" "--model Gemini 3.1 Pro" "$out"
 check "pro tier fallback emits stderr notice (#104)" 0 "$rc" "pro fell back to Gemini 3.1 Pro" "$out"
+out_fb2=$(STUB_MODE=args STUB_REJECT_MODEL="$DEF_PRO|Gemini 3.1 Pro" "$DELEGATE" --tier pro "hi" 2>&1); rc_fb2=$?
+check "pro tier falls back to Gemini 3.1 Pro (High) when both Argon and 3.1 Pro are unavailable (#104)" 0 "$rc_fb2" "--model Gemini 3.1 Pro (High)" "$out_fb2"
 err_fb=$(STUB_JSON_CAPABLE=1 STUB_MODE=json_ok STUB_REJECT_MODEL="$DEF_PRO" "$DELEGATE" --tier pro "hi" 2>&1 >/dev/null); rc_fb=$?
 check "pro tier fallback records Gemini 3.1 Pro in AGY_USAGE (#104)" 0 "$rc_fb" '"model": "Gemini 3.1 Pro"' "$err_fb"
 out_remap_fb=$(STUB_MODE=args STUB_REJECT_MODEL="Custom Pro" CLAUDE_PLUGIN_OPTION_TIER_PRO="Custom Pro" "$DELEGATE" --tier pro "hi" 2>&1); rc_remap_fb=$?
 check "explicit tier_pro remap does not fall back to Gemini 3.1 Pro (#104)" 14 "$rc_remap_fb" "MODEL_UNAVAILABLE" "$out_remap_fb"
+if has 'fell back to' "$out_remap_fb"; then
+  echo "FAIL: explicit tier_pro remap attempted a pro fallback retry"; FAIL=$((FAIL+1));
+else echo "ok: explicit tier_pro remap does not retry on exit 14 (#104)"; PASS=$((PASS+1)); fi
 
 # agy >= 1.1.8 structured output: used internally, stdout contract unchanged
 out=$(STUB_JSON_CAPABLE=1 STUB_MODE=json_ok "$DELEGATE" "hi" 2>/dev/null); rc=$?
@@ -1910,6 +1917,17 @@ cc_pro31_pc=$(STUB_MODE=text CLAUDE_CONFIG_DIR="$PCDIR" "$ROOT/scripts/agy-cost-
 check "agy-cost-compare --tier pro reads tier_pro from settings.json pluginConfigs (#101)" 0 "$?" "12.00" "$cc_pro31_pc"
 cc_pro31_fb=$(STUB_MODE=text STUB_REJECT_MODEL="$DEF_PRO" "$ROOT/scripts/agy-cost-compare.sh" --tier pro "hi" 2>/dev/null)
 check "agy-cost-compare --tier pro uses gemini_pro (out 12.00) after runtime fallback to 3.1 Pro (#104)" 0 "$?" "12.00" "$cc_pro31_fb"
+# A malformed AGY_USAGE line on stderr must not abort the outer price-selection block and
+# silently revert --tier pro to the hardcoded flash-tier fallback rates (0.75 / 3.75).
+BADU_BIN="$TMP/badu-bin"; mkdir -p "$BADU_BIN"
+cat > "$BADU_BIN/agy" <<'STUB'
+#!/usr/bin/env bash
+echo "AGY_USAGE {truncated" >&2
+echo "STUB_OK"
+STUB
+chmod +x "$BADU_BIN/agy"
+cc_badu=$(PATH="$BADU_BIN:$PATH" "$ROOT/scripts/agy-cost-compare.sh" --tier pro "hi" 2>/dev/null)
+check "agy-cost-compare --tier pro survives malformed AGY_USAGE without reverting to flash rates" 0 "$?" "10.00" "$cc_badu"
 
 echo "== measure-session.py =="
 SESS="$TMP/sess.jsonl"

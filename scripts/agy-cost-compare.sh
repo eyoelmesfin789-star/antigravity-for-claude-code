@@ -56,10 +56,9 @@ trap 'rm -f "$DEL_ERR" 2>/dev/null' EXIT
 echo ">> Delegating to agy (tier=$TIER) ..." >&2
 START=$(date +%s 2>/dev/null || echo 0)
 set +e
-OUT="$("$HERE/agy-delegate.sh" --tier "$TIER" ${YOLO:+$YOLO} "$PROMPT" 2>"$DEL_ERR")"
+OUT="$({ "$HERE/agy-delegate.sh" --tier "$TIER" ${YOLO:+$YOLO} "$PROMPT" 2> >(tee "$DEL_ERR" >&2); rc=$?; wait; exit "$rc"; })"
 RC=$?
 set -e
-[ -s "$DEL_ERR" ] && cat "$DEL_ERR" >&2
 [ "$RC" -eq 0 ] || exit "$RC"
 END=$(date +%s 2>/dev/null || echo 0)
 ELAPSED=$(( END - START ))
@@ -76,8 +75,10 @@ try:
     if os.path.isfile(errf):
         for line in open(errf,encoding="utf-8",errors="replace").read().splitlines():
             if line.startswith("AGY_USAGE "):
-                u=json.loads(line[len("AGY_USAGE "):])
-                if u.get("model"): pm=u["model"]
+                try:
+                    u=json.loads(line[len("AGY_USAGE "):])
+                    if isinstance(u,dict) and u.get("model"): pm=str(u["model"])
+                except Exception: pass
             m=re.search(r"pro fell back to ([^(]+)",line)
             if m: pm=m.group(1).strip()
     pk="gemini_argon" if ("argon" in pm.lower() and "gemini_argon" in d) else "gemini_pro"

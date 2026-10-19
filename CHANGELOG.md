@@ -5,18 +5,21 @@ All notable changes to **Antigravity for Claude Code**. Format loosely follows
 
 ## 0.29.0
 
-- **`pro` tier now defaults to `Gemini 4 Argon (High)` with an automatic one-shot fallback to
-  `Gemini 3.1 Pro`, and `agy-cost-compare` prices Argon accordingly.** (#104) On `agy 1.4.2`,
-  `--model "Gemini 3.1 Pro (High)"` fails with exit 14 (`MODEL_UNAVAILABLE`) on **both**
-  consumer Google AI plans — which dropped 3.1 Pro in favour of `Gemini 4 Argon (High|Medium|Low)` —
-  and enterprise plans, where `gemini-3.1-pro-high`'s display name changed to `Gemini 3.1 Pro`
-  (no `(High)` suffix) while `Gemini 4 Argon (High)` (`gemini-launch-candidate-high`) is served
-  alongside it. `Gemini 4 Argon (High)` is the display name both plans share. If an unremapped
-  `--tier pro` call hits `MODEL_UNAVAILABLE` on a plan that does not expose Argon (such as
-  API-key / GCP project configurations), `agy-delegate.sh` automatically retries once with
-  `Gemini 3.1 Pro` and notes the fallback on stderr (`AGY_USAGE.model` records the model that
-  actually ran). `agy-cost-compare.sh --tier pro` selects `gemini_argon` from `prices.json`
-  when the resolved pro model is Argon and `gemini_pro` otherwise.
+- **`pro` tier now defaults to `Gemini 4 Argon (High)` with an automatic fallback to
+  `Gemini 3.1 Pro` / `Gemini 3.1 Pro (High)`, and `agy-cost-compare` prices Argon accordingly.**
+  (#104) On `agy 1.4.2`, `--model "Gemini 3.1 Pro (High)"` fails with exit 14
+  (`MODEL_UNAVAILABLE`) on **both** consumer Google AI plans — which dropped 3.1 Pro in favour of
+  `Gemini 4 Argon (High|Medium|Low)` (per #102 / #104 issue reports) — and enterprise plans
+  (measured on `agy 1.4.2`), where `gemini-3.1-pro-high`'s display name changed to
+  `Gemini 3.1 Pro` (no `(High)` suffix) while `Gemini 4 Argon (High)`
+  (`gemini-launch-candidate-high`) is served alongside it. `Gemini 4 Argon (High)` is the display
+  name both plans share. If an unremapped `--tier pro` call hits `MODEL_UNAVAILABLE` on a plan
+  that does not expose Argon (such as API-key / GCP project configurations or older `agy` builds,
+  per issue reports), `agy-delegate.sh` automatically retries with `Gemini 3.1 Pro` and then
+  `Gemini 3.1 Pro (High)`, noting the fallback on stderr (`AGY_USAGE.model` records the model
+  that actually ran). `agy-cost-compare.sh --tier pro` streams `agy-delegate` stderr live while
+  capturing `AGY_USAGE`, selecting `gemini_argon` from `prices.json` when the model that ran is
+  Argon and `gemini_pro` otherwise.
 - **`agy-delegate.sh`, `doctor.sh`, and `agy-cost-compare.sh` now read `pluginConfigs` options
   from `${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json` via `scripts/lib/plugin-options.sh`.**
   (#101) Claude Code injects `userConfig` values as `CLAUDE_PLUGIN_OPTION_*` into hook processes
@@ -25,6 +28,10 @@ All notable changes to **Antigravity for Claude Code**. Format loosely follows
   health checks, and cost comparison unless duplicated into top-level `env`. All three scripts
   now source `scripts/lib/plugin-options.sh` to load unset `CLAUDE_PLUGIN_OPTION_*` variables
   from `settings.json` (`CLAUDE_CONFIG_DIR` honoured; explicit environment variables still win).
+  **Behaviour change for existing configs:** a `tier_pro` value previously saved under
+  `pluginConfigs` now takes effect and suppresses the unremapped `pro` fallback above, so a stale
+  or invalid model name in `settings.json` will now fail with exit 14 (`doctor.sh` flags it and
+  suggests valid replacements).
 - **`doctor.sh` matches tier models by exact slug or display name instead of substring, and
   suggests available replacements.** (#102, #104) `model_present()` previously passed
   whenever the configured name was a substring of a line in `agy models`, so
@@ -42,9 +49,11 @@ All notable changes to **Antigravity for Claude Code**. Format loosely follows
   emits a single non-fatal `agy-delegate: usage log not writable: <path>` notice on stderr (while
   suppressing raw bash redirection errors) when the path cannot be created or appended to.
 - **Catch-up to `agy 1.4.2`.** `agy-delegate.sh` accepts `--mode auto` (added in `agy 1.3.5`
-  for dynamic plan/execute switching) alongside `accept-edits` and `plan`, and classifies
-  Google AI credits / spend-cap exhaustion diagnostics (`agy 1.2.12+`) as exit 10
-  (`QUOTA_EXHAUSTED`). Suite 350 -> 372 (373 with PR base check).
+  for dynamic plan/execute switching, per upstream release notes) alongside `accept-edits` and
+  `plan`, and classifies Google AI credits / spend-cap exhaustion diagnostics (`agy 1.2.12+`
+  release notes) as exit 10 (`QUOTA_EXHAUSTED`). Measured directly against enterprise `agy 1.4.2`;
+  consumer-plan and API-key / GCP-project model availability are from issue reports (#102, #104).
+  Suite 350 -> 375 (376 with PR base check).
 
 ## 0.28.1
 
