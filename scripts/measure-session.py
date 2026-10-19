@@ -83,7 +83,7 @@ if __name__ == "__main__":
     print(f"  output         {r['output']:,}   <- expensive (frontier)")
     print(f"  input          {r['input']:,}")
     print(f"  cache_create   {r['cache_create']:,}   <- 1.25x input (cache writes)")
-    print(f"  cache_read     {r['cache_read']:,}   <- 0.1x input (the cheap re-read)")
+    print(f"  cache_read     {r['cache_read']:,}   <- 0.1x in the weighted unit (USD uses prices.json cache_read_mult)")
     print(f"  TOTAL tokens   {r['total']:,}")
     print(f"  COST-WEIGHTED  {weighted:,.0f}   <- model-agnostic $-proxy (output 5x, etc.)")
     pr = load_prices()

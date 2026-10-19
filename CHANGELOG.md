@@ -33,8 +33,9 @@ All notable changes to **Antigravity for Claude Code**. Format loosely follows
   `st_ino == 0` for every path, where that key would have merged every project on the
   volume into the first one and silently stopped scanning the rest — so the identity key
   falls back to `normcase(realpath())` when there is no inode, with its own test. Measured
-  on Linux: migrate suite 51 -> 58 checks (four new tests plus the isolation guard), all
-  passing; the reporter measured 38/17 -> 41/16 on Windows with the 16 pre-existing
+  on Linux: migrate suite 51 -> 58 passing checks (the `trustedWorkspaces` fixture also
+  carries a `tmp/..` spelling so that test fails on unfixed code on POSIX, not only on
+  Windows); the reporter measured 38/17 -> 41/16 on Windows with the 16 pre-existing
   failures untouched.
 - **`prices.json` priced the models of two generations ago.** (#1) `claude_opus` was
   5 / 25 and `claude_sonnet` 3 / 15 (the 4.x list), while the deck that actually

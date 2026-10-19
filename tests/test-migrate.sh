@@ -752,6 +752,12 @@ else bad "default_roots merged distinct directories on a filesystem without inod
 # trustedWorkspaces compared raw strings, so a project already covered by an
 # existing entry spelled with other separators (or, on a case-insensitive
 # filesystem, other case) was appended again.
+#
+# Two spellings are exercised at once, because one of them is a no-op on POSIX: the
+# project is recorded with forward slashes (differs from os.sep only on Windows), and
+# the existing trusted entry carries a `tmp/..` component, which the old
+# `startswith(t.rstrip("/") + "/")` never matched on any platform but `abspath()` folds.
+# On unfixed code the second spelling makes this test fail on Linux too.
 if python3 - "$MIG" "$TMP" <<'PY'
 import importlib.util, json, os, sys
 spec = importlib.util.spec_from_file_location("m", sys.argv[1])
@@ -759,11 +765,12 @@ m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 base = os.path.join(sys.argv[2], "trust-spell")
 proj = os.path.join(base, "Work", "proj")
 os.makedirs(proj, exist_ok=True)
+os.makedirs(os.path.join(base, "Work", "tmp"), exist_ok=True)
 fwd = proj.replace(os.sep, "/")
 cj = os.path.join(base, "claude.json")
 json.dump({"projects": {fwd: {"hasTrustDialogAccepted": True}}}, open(cj, "w"))
 st = os.path.join(base, "settings.json")
-json.dump({"trustedWorkspaces": [os.path.join(base, "Work")]}, open(st, "w"))
+json.dump({"trustedWorkspaces": [os.path.join(base, "Work", "tmp", "..")]}, open(st, "w"))
 m.claude_json_path = lambda: cj
 m.agy_settings_path = lambda: st
 m.claude_dir = lambda: os.path.join(base, "no-claude")
