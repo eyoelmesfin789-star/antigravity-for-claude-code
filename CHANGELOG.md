@@ -39,15 +39,21 @@ All notable changes to **Antigravity for Claude Code**. Format loosely follows
 - **`prices.json` priced the models of two generations ago.** (#1) `claude_opus` was
   5 / 25 and `claude_sonnet` 3 / 15 (the 4.x list), while the deck that actually
   orchestrates today is Opus 5.5 at 4 / 20 (Sonnet 5.5: 2 / 10), so every
-  `measure-session` and `agy-cost-compare` figure overstated the Claude side by 25%.
+  `measure-session` **est. USD** line and `agy-cost-compare` figure overstated the Claude
+  side by 25%. The COST-WEIGHTED units are untouched: those multipliers (output 5x,
+  cache_write 1.25x, cache_read 0.1x) are a fixed convention that every row in
+  `docs/AB-RESULTS.md` was recorded in, so new runs stay comparable with old ones;
+  `measure-session.py` now says so where it computes them.
   Re-verified 2026-10-19 against the Vertex AI and Anthropic pricing pages: Opus and
   Sonnet repriced, `cache_read_mult` 0.10 -> 0.05 (the 5.5 generation reads cache at 5% of
-  input), `gemini_pro` gains its `cached_in` (0.20), and two rows are added for **Gemini 4
-  Argon** — the `pro`-class model consumer Google AI plans list instead of 3.1 Pro (#104):
+  input; `measure-session.py`'s fallback for a missing key moves with it), `gemini_pro`
+  gains its `cached_in` (0.20), and two rows are added for **Gemini 4 Argon** — the
+  `pro`-class model consumer Google AI plans list instead of 3.1 Pro (#104):
   `gemini_argon` at the introductory 2 / 10 / 0.10 through 2026-11-30 and
-  `gemini_argon_post_2026_12` at the standard 4 / 20 / 0.20. The notes say which promo
-  ends when, and that at least one pay-as-you-go project was billed the standard Argon rate
-  during the promo window, so check your own invoice. `agy-cost-compare.sh`'s hardcoded
+  `gemini_argon_post_2026_12` at the standard 4 / 20 / 0.20. The list rates come from the
+  public pricing pages; the note that at least one pay-as-you-go project was billed the
+  standard Argon rate during the promo window comes from that project's Cloud Billing
+  export, not from a page — so check your own invoice. `agy-cost-compare.sh`'s hardcoded
   Claude fallbacks move with the file (the drift check in the suite would have failed
   otherwise). Suite 345 -> 349.
 
